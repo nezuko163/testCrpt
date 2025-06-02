@@ -22,30 +22,24 @@ public class CrptApiTest {
 
     @BeforeAll
     static void startServer() throws Exception {
-        // Запускаем HttpServer на случайном свободном порту
         server = HttpServer.create(new InetSocketAddress(0), 0);
         int port = server.getAddress().getPort();
         baseUrl = "http://localhost:" + port + "/api/v3";
 
-        // Контекст для /api/v3/lk/documents/create
         server.createContext("/api/v3/lk/documents/create", (HttpExchange exchange) -> {
-            // Ожидаем POST
             if (!"POST".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, -1);
                 return;
             }
 
-            // Читаем тело запроса (JSON‑обёртка + Base64 документа)
             InputStream is = exchange.getRequestBody();
             byte[] requestBytes = is.readAllBytes();
             String requestBody = new String(requestBytes, StandardCharsets.UTF_8);
             is.close();
 
-            // Проверяем, что метод действительно отправляет JSON с полем "type":"LP_INTRODUCE_GOODS"
             assertTrue(requestBody.contains("\"type\":\"LP_INTRODUCE_GOODS\""),
                     "Ожидалось, что в теле запроса будет поле \"type\":\"LP_INTRODUCE_GOODS\"");
 
-            // Подготавливаем фиктивный JSON‑ответ
             String responseJson = "{\"value\":\"test‑doc‑id\"}";
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             byte[] respBytes = responseJson.getBytes(StandardCharsets.UTF_8);
@@ -67,10 +61,8 @@ public class CrptApiTest {
 
     @Test
     void testCreateIntroduceGoodsDocument() throws Exception {
-        // Создаём клиент с baseUrl = наш локальный HttpServer, лимит 10 запросов в секунду
         CrptApi api = new CrptApi(5, TimeUnit.SECONDS, "dummy-token", baseUrl);
 
-        // Строим минимальный документ IntroduceGoodsDocument
         CrptApi.IntroduceGoodsDocument doc = CrptApi.IntroduceGoodsDocument.builder()
                 .description(new CrptApi.IntroduceGoodsDocument.Description("1111111111"))
                 .docId("doc‑1")
@@ -87,17 +79,14 @@ public class CrptApiTest {
                 .regNumber("reg‑1")
                 .build();
 
-        String dummySignature = "dummy‑signature"; // просто строка, будет передана как есть
+        String dummySignature = "dummy‑signature";
 
-        // Вызываем метод: он заблокируется, если семафор исчерпан, но у нас лимит 10, запрос единственный
         HttpResponse<String> response = api.createDocument(doc, dummySignature, CrptApi.DocumentFormat.LP_INTRODUCE_GOODS, "asd", "asd");
-//
-//        // Проверяем, что получили код 200 и тело содержит "test‑doc‑id"
+
         assertEquals(200, response.statusCode(), "Ожидался HTTP 200");
         assertTrue(response.body().contains("test‑doc‑id"),
                 "Ожидалось, что тело ответа содержит \"test‑doc‑id\"");
 
-        // Останавливаем внутренний ScheduledExecutorService
         api.stop();
     }
 }
